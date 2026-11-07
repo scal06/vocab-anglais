@@ -1,0 +1,877 @@
+
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  BookOpen, 
+  Sparkles, 
+  Brain, 
+  ListFilter, 
+  Upload, 
+  Volume2, 
+  RotateCw, 
+  CheckCircle2, 
+  XCircle, 
+  HelpCircle, 
+  Flame, 
+  Plus, 
+  Trash2, 
+  Search, 
+  FileSpreadsheet, 
+  Download, 
+  Moon, 
+  Sun, 
+  Check, 
+  ArrowRight,
+  ChevronRight,
+  VolumeX,
+  Shuffle,
+  RefreshCw,
+  Award,
+  Layers
+} from 'lucide-react';
+
+// Default starter vocabulary dataset (B2/C1 level)
+const DEFAULT_VOCABULARY = [
+  { id: '1', word: 'Serendipity', translation: 'Sérendipité (trouver qqch par chance)', example: 'Finding this book was pure serendipity.', status: 'new', category: 'Advanced', phonetic: '/ˌser.ənˈdɪp.ə.ti/' },
+  { id: '2', word: 'Resilient', translation: 'Résilient / Resistant', example: 'She is a resilient person who bounces back easily.', status: 'learning', category: 'Personality', phonetic: '/rɪˈzɪl.jənt/' },
+  { id: '3', word: 'Ubiquitous', translation: 'Omniprésent / Ubiqutaire', example: 'Smartphones have become ubiquitous in daily life.', status: 'mastered', category: 'Tech & Society', phonetic: '/juːˈbɪk.wə.təs/' },
+  { id: '4', word: 'Eager', translation: 'Enthousiaste / Impatient', example: 'He is eager to start his new job next week.', status: 'learning', category: 'Emotions', phonetic: '/ˈiː.ɡər/' },
+  { id: '5', word: 'Quintessential', translation: 'Par excellence / Quintessentiel', example: 'It is the quintessential Parisian café.', status: 'new', category: 'Advanced', phonetic: '/ˌkwɪn.təˈsen.ʃəl/' },
+  { id: '6', word: 'Elaborate', translation: 'Élaboré / Complexe / Détaillé', example: 'They made elaborate plans for the anniversary party.', status: 'new', category: 'General', phonetic: '/ɪˈlæb.ər.ət/' },
+  { id: '7', word: 'Pragmatic', translation: 'Pragmatique / Factuel', example: 'We need a pragmatic solution to this financial problem.', status: 'mastered', category: 'Work', phonetic: '/præɡˈmæt.ɪk/' },
+  { id: '8', word: 'Empathy', translation: 'Empathie', example: 'Having empathy allows you to connect deeper with others.', status: 'mastered', category: 'Personality', phonetic: '/ˈem.pə.θi/' },
+  { id: '9', word: 'Scrutinize', translation: 'Scruter / Examiner de près', example: 'The tax auditors will scrutinize all official records.', status: 'new', category: 'Work', phonetic: '/ˈskruː.tɪ.naɪz/' },
+  { id: '10', word: 'Fastidious', translation: 'Minutieux / Exigeant', example: 'He is fastidious about keeping his desk clean.', status: 'learning', category: 'Personality', phonetic: '/fæsˈtɪd.i.əs/' },
+  { id: '11', word: 'Lucid', translation: 'Lucide / Clair', example: 'She gave a very lucid explanation of the complex system.', status: 'new', category: 'General', phonetic: '/ˈluː.sɪd/' },
+  { id: '12', word: 'Meticulous', translation: 'Meticuleux / Soigné', example: 'The painter paid meticulous attention to fine detail.', status: 'mastered', category: 'Work', phonetic: '/məˈtɪk.jə.ləs/' },
+  { id: '13', word: 'Nostalgic', translation: 'Nostalgique', example: 'Old photos always make me feel nostalgic.', status: 'learning', category: 'Emotions', phonetic: '/nɒsˈtæl.dʒɪk/' },
+  { id: '14', word: 'Obsolete', translation: 'Obsolète / Désuet', example: 'Floppy disks became obsolete many years ago.', status: 'new', category: 'Tech & Society', phonetic: '/ˌɒb.səˈliːt/' },
+  { id: '15', word: 'Profound', translation: 'Profond / Intense', example: 'The book had a profound effect on my worldview.', status: 'learning', category: 'Advanced', phonetic: '/prəˈfaʊnd/' }
+];
+
+export default function App() {
+  // State management
+  const [vocabList, setVocabList] = useState(() => {
+    const saved = localStorage.getItem('android_vocab_list');
+    return saved ? JSON.parse(saved) : DEFAULT_VOCABULARY;
+  });
+
+  const [activeTab, setActiveTab] = useState('wordOfDay'); // 'wordOfDay', 'flashcards', 'quiz', 'list'
+  const [darkMode, setDarkMode] = useState(false);
+  const [streakCount, setStreakCount] = useState(5);
+  const [speechRate, setSpeechRate] = useState(0.9);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  // Flashcards State
+  const [cardIndex, setCardIndex] = useState(0);
+  const [isFlipped, setIsFlipped] = useState(false);
+
+  // Quiz State
+  const [quizScore, setQuizScore] = useState(0);
+  const [quizQuestionIndex, setQuizQuestionIndex] = useState(0);
+  const [quizOptions, setQuizOptions] = useState([]);
+  const [selectedOption, setSelectedOption] = useState(null);
+  const [quizFinished, setQuizFinished] = useState(false);
+
+  // List & Import State
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [isAddingWord, setIsAddingWord] = useState(false);
+  const [newWord, setNewWord] = useState({ word: '', translation: '', example: '', category: 'General' });
+
+  // Persistence
+  useEffect(() => {
+    localStorage.setItem('android_vocab_list', JSON.stringify(vocabList));
+  }, [vocabList]);
+
+  // Load SheetJS dynamically for Excel Import
+  useEffect(() => {
+    if (!window.XLSX) {
+      const script = document.createElement('script');
+      script.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+      script.async = true;
+      document.body.appendChild(script);
+    }
+  }, []);
+
+  // Web Speech API Pronunciation
+  const speakWord = (text) => {
+    if (!('speechSynthesis' in window)) {
+      alert("Votre navigateur ne prend pas en charge la synthèse vocale.");
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+    utterance.rate = speechRate;
+    
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+
+    window.speechSynthesis.speak(utterance);
+  };
+
+  // Word of the Day Selection (Based on current date seed)
+  const wordOfTheDay = useMemo(() => {
+    if (vocabList.length === 0) return null;
+    const today = new Date();
+    const dayOfYear = Math.floor((today - new Date(today.getFullYear(), 0, 0)) / (1000 * 60 * 60 * 24));
+    const index = dayOfYear % vocabList.length;
+    return vocabList[index] || vocabList[0];
+  }, [vocabList]);
+
+  // Quiz Setup
+  const initQuiz = () => {
+    if (vocabList.length < 4) return;
+    setQuizQuestionIndex(0);
+    setQuizScore(0);
+    setQuizFinished(false);
+    setSelectedOption(null);
+    generateQuizQuestion(0);
+  };
+
+  const generateQuizQuestion = (currentIndex) => {
+    if (vocabList.length < 4) return;
+    const currentWord = vocabList[currentIndex % vocabList.length];
+    
+    // Pick 3 wrong options
+    const wrongList = vocabList.filter(item => item.id !== currentWord.id);
+    const shuffledWrong = [...wrongList].sort(() => 0.5 - Math.random()).slice(0, 3);
+    
+    const options = [...shuffledWrong, currentWord].sort(() => 0.5 - Math.random());
+    setQuizOptions(options);
+  };
+
+  useEffect(() => {
+    if (activeTab === 'quiz') {
+      initQuiz();
+    }
+  }, [activeTab]);
+
+  const handleAnswerQuiz = (option) => {
+    if (selectedOption !== null) return;
+    setSelectedOption(option);
+    
+    const currentWord = vocabList[quizQuestionIndex % vocabList.length];
+    if (option.id === currentWord.id) {
+      setQuizScore(prev => prev + 1);
+    }
+
+    setTimeout(() => {
+      if (quizQuestionIndex + 1 < Math.min(vocabList.length, 10)) {
+        setQuizQuestionIndex(prev => prev + 1);
+        setSelectedOption(null);
+        generateQuizQuestion(quizQuestionIndex + 1);
+      } else {
+        setQuizFinished(true);
+      }
+    }, 1200);
+  };
+
+  // Handle Card Flashcard Navigation & Mastery
+  const updateStatus = (id, newStatus) => {
+    setVocabList(prev => prev.map(item => item.id === id ? { ...item, status: newStatus } : item));
+    // Move to next card
+    setIsFlipped(false);
+    setTimeout(() => {
+      setCardIndex((prev) => (prev + 1) % vocabList.length);
+    }, 150);
+  };
+
+  // Excel File Parsing with SheetJS
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = new Uint8Array(evt.target.result);
+        const workbook = window.XLSX.read(data, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const jsonData = window.XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+        if (jsonData.length < 2) {
+          alert("Le fichier Excel semble vide ou mal formaté.");
+          return;
+        }
+
+        // Headers detection
+        const headers = jsonData[0].map(h => String(h).toLowerCase());
+        
+        let wordCol = headers.findIndex(h => h.includes('word') || h.includes('mot') || h.includes('anglais'));
+        let transCol = headers.findIndex(h => h.includes('trans') || h.includes('trad') || h.includes('french') || h.includes('français'));
+        let exCol = headers.findIndex(h => h.includes('ex') || h.includes('phrase') || h.includes('context'));
+        let catCol = headers.findIndex(h => h.includes('cat') || h.includes('level') || h.includes('niveau'));
+
+        if (wordCol === -1) wordCol = 0;
+        if (transCol === -1) transCol = 1;
+
+        const importedWords = [];
+        for (let i = 1; i < jsonData.length; i++) {
+          const row = jsonData[i];
+          if (row[wordCol] && row[transCol]) {
+            importedWords.push({
+              id: Date.now() + '-' + i,
+              word: String(row[wordCol]).trim(),
+              translation: String(row[transCol]).trim(),
+              example: exCol !== -1 && row[exCol] ? String(row[exCol]).trim() : 'Exemple non spécifié.',
+              category: catCol !== -1 && row[catCol] ? String(row[catCol]).trim() : 'Importé',
+              status: 'new'
+            });
+          }
+        }
+
+        if (importedWords.length > 0) {
+          setVocabList(importedWords);
+          setCardIndex(0);
+          alert(`${importedWords.length} mots importés avec succès depuis le fichier Excel !`);
+        } else {
+          alert("Aucun mot valide trouvé dans le fichier Excel.");
+        }
+      } catch (err) {
+        console.error(err);
+        alert("Erreur lors de la lecture du fichier Excel. Assurez-vous qu'il s'agit d'un fichier .xlsx ou .csv valide.");
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  // Export List to Excel
+  const exportToExcel = () => {
+    if (!window.XLSX) return;
+    const dataToExport = vocabList.map(item => ({
+      'Mot Anglais': item.word,
+      'Traduction': item.translation,
+      'Exemple': item.example,
+      'Catégorie': item.category,
+      'Statut': item.status
+    }));
+
+    const worksheet = window.XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(workbook, worksheet, "Vocabulaire");
+    window.XLSX.writeFile(workbook, "Mon_Vocabulaire_Anglais.xlsx");
+  };
+
+  // Add Manual Word
+  const handleAddWordSubmit = (e) => {
+    e.preventDefault();
+    if (!newWord.word || !newWord.translation) return;
+
+    const item = {
+      id: Date.now().toString(),
+      word: newWord.word.trim(),
+      translation: newWord.translation.trim(),
+      example: newWord.example.trim() || 'No example provided.',
+      category: newWord.category.trim() || 'Général',
+      status: 'new'
+    };
+
+    setVocabList(prev => [item, ...prev]);
+    setNewWord({ word: '', translation: '', example: '', category: 'General' });
+    setIsAddingWord(false);
+  };
+
+  // Delete word
+  const deleteWord = (id) => {
+    setVocabList(prev => prev.filter(w => w.id !== id));
+  };
+
+  // Filtered List
+  const filteredVocab = useMemo(() => {
+    return vocabList.filter(item => {
+      const matchesSearch = item.word.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                            item.translation.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = filterStatus === 'all' || item.status === filterStatus;
+      return matchesSearch && matchesStatus;
+    });
+  }, [vocabList, searchTerm, filterStatus]);
+
+  return (
+    <div className={`${darkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-800'} min-h-screen font-sans transition-colors duration-200 flex flex-col justify-center items-center p-0 sm:p-4`}>
+      
+      {/* Container simulating a mobile phone viewport */}
+      <div className={`w-full max-w-md h-full sm:h-[880px] ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} sm:rounded-[40px] shadow-2xl flex flex-col overflow-hidden relative border-0 sm:border-[8px]`}>
+
+        {/* Top Android Status Bar */}
+        <div className={`px-6 pt-3 pb-2 flex justify-between items-center text-xs font-semibold ${darkMode ? 'text-slate-400 bg-slate-900' : 'text-slate-500 bg-white'} select-none z-10`}>
+          <span>09:41</span>
+          <div className="flex items-center space-x-2">
+            <span className="flex items-center text-amber-500 font-bold gap-0.5">
+              <Flame className="w-4 h-4 fill-amber-500 text-amber-500" />
+              {streakCount} j
+            </span>
+            <button 
+              onClick={() => setDarkMode(!darkMode)}
+              className="p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition"
+              title="Changer de thème"
+            >
+              {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
+            </button>
+          </div>
+        </div>
+
+        {/* Android Material Header */}
+        <header className="px-6 py-4 flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800/80 bg-gradient-to-r from-indigo-600 via-indigo-700 to-violet-700 text-white shadow-md">
+          <div>
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-amber-300 animate-pulse" />
+              <h1 className="text-xl font-extrabold tracking-tight">LexiMaster EN</h1>
+            </div>
+            <p className="text-xs text-indigo-100 mt-0.5">Android Material Vocabulary</p>
+          </div>
+
+          <div className="flex items-center gap-1 bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-full text-xs">
+            <Layers className="w-3.5 h-3.5 text-indigo-200" />
+            <span className="font-bold">{vocabList.length}</span> Mots
+          </div>
+        </header>
+
+        {/* Dynamic Content View */}
+        <main className="flex-1 overflow-y-auto p-4 sm:p-5 relative">
+          
+          {/* TAB 1: WORD OF THE DAY */}
+          {activeTab === 'wordOfDay' && wordOfTheDay && (
+            <div className="space-y-5 animate-fadeIn">
+              
+              {/* Daily Card Banner */}
+              <div className="bg-gradient-to-br from-indigo-500 via-indigo-600 to-purple-700 rounded-3xl p-6 text-white shadow-lg relative overflow-hidden">
+                <div className="absolute -right-6 -bottom-6 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
+                
+                <div className="flex justify-between items-center mb-4">
+                  <span className="bg-white/20 backdrop-blur-md text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wider">
+                    Mot du Jour 🌟
+                  </span>
+                  <span className="text-xs text-indigo-200">
+                    {new Date().toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                  </span>
+                </div>
+
+                <div className="my-3">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-3xl font-black tracking-wide">{wordOfTheDay.word}</h2>
+                    <button 
+                      onClick={() => speakWord(wordOfTheDay.word)}
+                      className={`p-3 rounded-full bg-white/20 hover:bg-white/30 active:scale-95 transition shadow-sm ${isSpeaking ? 'animate-bounce bg-amber-400 text-indigo-950' : ''}`}
+                    >
+                      <Volume2 className="w-6 h-6" />
+                    </button>
+                  </div>
+                  {wordOfTheDay.phonetic && (
+                    <p className="text-sm font-mono text-indigo-200 mt-1">{wordOfTheDay.phonetic}</p>
+                  )}
+                </div>
+
+                <div className="mt-6 pt-4 border-t border-white/20">
+                  <p className="text-xs text-indigo-200 uppercase font-semibold tracking-wider">Traduction</p>
+                  <p className="text-xl font-bold text-amber-300 mt-0.5">{wordOfTheDay.translation}</p>
+                </div>
+              </div>
+
+              {/* Example Card */}
+              <div className={`rounded-2xl p-4 border ${darkMode ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-50 border-slate-200'} shadow-sm`}>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-500 mb-2 flex items-center gap-1.5">
+                  <BookOpen className="w-4 h-4" /> Exemple Contextuel
+                </h3>
+                <p className="italic text-slate-700 dark:text-slate-300 leading-relaxed text-sm">
+                  "{wordOfTheDay.example}"
+                </p>
+                <div className="mt-3 flex justify-end">
+                  <button 
+                    onClick={() => speakWord(wordOfTheDay.example)}
+                    className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold flex items-center gap-1 hover:underline"
+                  >
+                    <Volume2 className="w-3.5 h-3.5" /> Écouter la phrase
+                  </button>
+                </div>
+              </div>
+
+              {/* Progress Summary Mini Dashboard */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className={`p-3 rounded-2xl border text-center ${darkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-emerald-50 border-emerald-100'}`}>
+                  <p className="text-xs text-emerald-600 font-semibold">Acquis</p>
+                  <p className="text-xl font-black text-emerald-700 dark:text-emerald-400">
+                    {vocabList.filter(w => w.status === 'mastered').length}
+                  </p>
+                </div>
+                <div className={`p-3 rounded-2xl border text-center ${darkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-amber-50 border-amber-100'}`}>
+                  <p className="text-xs text-amber-600 font-semibold">En cours</p>
+                  <p className="text-xl font-black text-amber-700 dark:text-amber-400">
+                    {vocabList.filter(w => w.status === 'learning').length}
+                  </p>
+                </div>
+                <div className={`p-3 rounded-2xl border text-center ${darkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-indigo-50 border-indigo-100'}`}>
+                  <p className="text-xs text-indigo-600 font-semibold">À apprendre</p>
+                  <p className="text-xl font-black text-indigo-700 dark:text-indigo-400">
+                    {vocabList.filter(w => w.status === 'new').length}
+                  </p>
+                </div>
+              </div>
+
+              {/* Call to Action Button */}
+              <button 
+                onClick={() => setActiveTab('flashcards')}
+                className="w-full py-3.5 px-4 rounded-2xl bg-indigo-600 hover:bg-indigo-700 active:scale-98 text-white font-semibold flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 transition"
+              >
+                Lancer la session Flashcards
+                <ArrowRight className="w-5 h-5" />
+              </button>
+
+            </div>
+          )}
+
+          {/* TAB 2: FLASHCARDS */}
+          {activeTab === 'flashcards' && vocabList.length > 0 && (
+            <div className="h-full flex flex-col justify-between space-y-4">
+              
+              {/* Progress counter */}
+              <div className="flex justify-between items-center text-xs text-slate-500 font-medium">
+                <span>Carte {cardIndex + 1} sur {vocabList.length}</span>
+                <span className="bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 px-2.5 py-1 rounded-full font-bold">
+                  {vocabList[cardIndex]?.category || 'Général'}
+                </span>
+              </div>
+
+              {/* 3D Flip Flashcard */}
+              <div 
+                onClick={() => setIsFlipped(!isFlipped)}
+                className="w-full h-72 cursor-pointer perspective-1000 my-auto"
+              >
+                <div className={`relative w-full h-full rounded-3xl transition-transform duration-500 transform-style-3d shadow-xl border ${darkMode ? 'border-slate-700' : 'border-slate-200'} ${isFlipped ? 'rotate-y-180' : ''}`}>
+                  
+                  {/* Front Side */}
+                  <div className={`absolute inset-0 w-full h-full rounded-3xl p-6 backface-hidden flex flex-col justify-between items-center text-center ${darkMode ? 'bg-gradient-to-b from-slate-800 to-slate-900 text-white' : 'bg-gradient-to-b from-white to-slate-50 text-slate-800'}`}>
+                    <div className="w-full flex justify-end">
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          speakWord(vocabList[cardIndex].word);
+                        }}
+                        className="p-2.5 rounded-full bg-indigo-50 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 transition"
+                      >
+                        <Volume2 className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div>
+                      <h3 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-wide">
+                        {vocabList[cardIndex].word}
+                      </h3>
+                      {vocabList[cardIndex].phonetic && (
+                        <p className="text-sm font-mono text-indigo-500 mt-2">{vocabList[cardIndex].phonetic}</p>
+                      )}
+                    </div>
+
+                    <p className="text-xs text-slate-400 flex items-center gap-1 font-medium">
+                      <RotateCw className="w-3.5 h-3.5" /> Touchez pour retourner la carte
+                    </p>
+                  </div>
+
+                  {/* Back Side */}
+                  <div className={`absolute inset-0 w-full h-full rounded-3xl p-6 backface-hidden rotate-y-180 flex flex-col justify-between items-center text-center ${darkMode ? 'bg-slate-800 text-white' : 'bg-indigo-900 text-white'}`}>
+                    <div className="w-full flex justify-end">
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          speakWord(vocabList[cardIndex].example);
+                        }}
+                        className="p-2.5 rounded-full bg-white/10 text-white hover:bg-white/20 transition"
+                      >
+                        <Volume2 className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="space-y-3 px-2">
+                      <span className="text-xs uppercase font-bold tracking-widest text-amber-300">Traduction</span>
+                      <h3 className="text-2xl font-bold">{vocabList[cardIndex].translation}</h3>
+                      
+                      <div className="border-t border-white/10 pt-3">
+                        <p className="text-xs text-indigo-200 italic font-normal">
+                          "{vocabList[cardIndex].example}"
+                        </p>
+                      </div>
+                    </div>
+
+                    <span className="text-xs text-indigo-300 font-medium">Auto-évaluation ci-dessous</span>
+                  </div>
+
+                </div>
+              </div>
+
+              {/* Action Buttons for Assessment */}
+              <div className="grid grid-cols-3 gap-2">
+                <button 
+                  onClick={() => updateStatus(vocabList[cardIndex].id, 'new')}
+                  className="py-3 rounded-2xl bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 font-bold border border-red-200 dark:border-red-900/40 text-xs flex flex-col items-center gap-1 transition"
+                >
+                  <XCircle className="w-5 h-5 text-red-500" />
+                  À réviser
+                </button>
+                
+                <button 
+                  onClick={() => updateStatus(vocabList[cardIndex].id, 'learning')}
+                  className="py-3 rounded-2xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold border border-amber-200 dark:border-amber-900/40 text-xs flex flex-col items-center gap-1 transition"
+                >
+                  <HelpCircle className="w-5 h-5 text-amber-500" />
+                  Moyen
+                </button>
+                
+                <button 
+                  onClick={() => updateStatus(vocabList[cardIndex].id, 'mastered')}
+                  className="py-3 rounded-2xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-200 dark:border-emerald-900/40 text-xs flex flex-col items-center gap-1 transition"
+                >
+                  <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                  Acquis
+                </button>
+              </div>
+
+              {/* Navigation Arrows */}
+              <div className="flex justify-between items-center px-4 pt-1">
+                <button 
+                  onClick={() => { setIsFlipped(false); setCardIndex((prev) => (prev - 1 + vocabList.length) % vocabList.length); }}
+                  className="text-xs text-slate-500 hover:text-indigo-600 font-semibold flex items-center gap-1"
+                >
+                  ← Précédent
+                </button>
+                <button 
+                  onClick={() => { setIsFlipped(false); setCardIndex((prev) => (prev + 1) % vocabList.length); }}
+                  className="text-xs text-slate-500 hover:text-indigo-600 font-semibold flex items-center gap-1"
+                >
+                  Suivant →
+                </button>
+              </div>
+
+            </div>
+          )}
+
+          {/* TAB 3: QUIZ */}
+          {activeTab === 'quiz' && (
+            <div className="h-full flex flex-col justify-between">
+              {vocabList.length < 4 ? (
+                <div className="text-center py-12 px-4">
+                  <Brain className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                  <p className="text-slate-600 dark:text-slate-400 font-semibold">
+                    Veuillez ajouter au moins 4 mots dans votre liste pour débloquer le mode Quiz.
+                  </p>
+                </div>
+              ) : quizFinished ? (
+                <div className="text-center py-8 space-y-6 animate-fadeIn my-auto">
+                  <div className="w-20 h-20 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
+                    <Award className="w-10 h-10" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-black">Quiz Terminé !</h2>
+                    <p className="text-slate-500 text-sm mt-1">Voici votre score final :</p>
+                    <p className="text-4xl font-extrabold text-indigo-600 mt-3">
+                      {quizScore} / {Math.min(vocabList.length, 10)}
+                    </p>
+                  </div>
+
+                  <button 
+                    onClick={initQuiz}
+                    className="w-full py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold flex items-center justify-center gap-2 shadow-lg"
+                  >
+                    <RefreshCw className="w-4 h-4" /> Recommencer un Quiz
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Question Header */}
+                  <div className="flex justify-between items-center text-xs font-semibold text-slate-500">
+                    <span>Question {quizQuestionIndex + 1} / {Math.min(vocabList.length, 10)}</span>
+                    <span className="text-emerald-600 font-bold">Score: {quizScore}</span>
+                  </div>
+
+                  {/* Target Word */}
+                  <div className={`p-6 rounded-2xl text-center border shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-indigo-50 border-indigo-100'}`}>
+                    <span className="text-xs uppercase font-bold text-indigo-500 tracking-wider">Que signifie le mot :</span>
+                    <h2 className="text-3xl font-black text-slate-900 dark:text-white mt-1">
+                      {vocabList[quizQuestionIndex % vocabList.length]?.word}
+                    </h2>
+                    <button 
+                      onClick={() => speakWord(vocabList[quizQuestionIndex % vocabList.length]?.word)}
+                      className="mt-3 text-xs text-indigo-600 dark:text-indigo-400 font-semibold inline-flex items-center gap-1"
+                    >
+                      <Volume2 className="w-4 h-4" /> Écouter
+                    </button>
+                  </div>
+
+                  {/* Multiple Choice Options */}
+                  <div className="space-y-3">
+                    {quizOptions.map((opt, idx) => {
+                      const isCorrect = opt.id === vocabList[quizQuestionIndex % vocabList.length]?.id;
+                      const isSelected = selectedOption?.id === opt.id;
+                      
+                      let btnStyle = darkMode ? 'bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-200' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-800';
+                      
+                      if (selectedOption) {
+                        if (isCorrect) {
+                          btnStyle = 'bg-emerald-500 text-white border-emerald-600 shadow-md';
+                        } else if (isSelected) {
+                          btnStyle = 'bg-red-500 text-white border-red-600';
+                        }
+                      }
+
+                      return (
+                        <button
+                          key={opt.id || idx}
+                          onClick={() => handleAnswerQuiz(opt)}
+                          disabled={selectedOption !== null}
+                          className={`w-full p-4 rounded-2xl border text-left font-semibold text-sm transition flex items-center justify-between ${btnStyle}`}
+                        >
+                          <span>{opt.translation}</span>
+                          {selectedOption && isCorrect && <Check className="w-5 h-5 text-white" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 4: MY LIST & EXCEL IMPORT */}
+          {activeTab === 'list' && (
+            <div className="space-y-4">
+              
+              {/* Excel Drag & Drop / Upload Card */}
+              <div className={`p-4 rounded-2xl border-2 border-dashed ${darkMode ? 'bg-slate-800/40 border-slate-700' : 'bg-slate-50 border-indigo-200'} text-center relative hover:border-indigo-500 transition`}>
+                <input 
+                  type="file" 
+                  accept=".xlsx, .xls, .csv" 
+                  onChange={handleFileUpload} 
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                />
+                <FileSpreadsheet className="w-8 h-8 text-indigo-600 dark:text-indigo-400 mx-auto mb-1" />
+                <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                  Importer un fichier Excel (.xlsx, .csv)
+                </p>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  Glissez-déposez ou cliquez pour choisir
+                </p>
+              </div>
+
+              {/* Action Toolbar */}
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                  <input 
+                    type="text" 
+                    placeholder="Rechercher un mot..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className={`w-full pl-9 pr-3 py-2 rounded-xl text-xs font-medium border focus:outline-none focus:ring-2 focus:ring-indigo-500 ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200'}`}
+                  />
+                </div>
+
+                <button 
+                  onClick={() => setIsAddingWord(true)}
+                  className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1 shadow-sm"
+                >
+                  <Plus className="w-4 h-4" /> Ajouter
+                </button>
+
+                <button 
+                  onClick={exportToExcel}
+                  className="p-2 border rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-semibold"
+                  title="Exporter la liste en Excel"
+                >
+                  <Download className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Status Filter Chips */}
+              <div className="flex gap-1.5 overflow-x-auto pb-1 text-[11px] font-semibold">
+                {[
+                  { id: 'all', label: 'Tous' },
+                  { id: 'new', label: 'À réviser' },
+                  { id: 'learning', label: 'Moyen' },
+                  { id: 'mastered', label: 'Acquis' },
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setFilterStatus(tab.id)}
+                    className={`px-3 py-1 rounded-full whitespace-nowrap transition ${filterStatus === tab.id ? 'bg-indigo-600 text-white' : darkMode ? 'bg-slate-800 text-slate-400' : 'bg-slate-200 text-slate-600'}`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Vocabulary Items List */}
+              <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+                {filteredVocab.length === 0 ? (
+                  <p className="text-center text-xs text-slate-400 py-8">Aucun mot ne correspond à votre recherche.</p>
+                ) : (
+                  filteredVocab.map((item) => (
+                    <div 
+                      key={item.id}
+                      className={`p-3 rounded-xl border flex items-center justify-between transition ${darkMode ? 'bg-slate-800/60 border-slate-700/60 hover:bg-slate-800' : 'bg-white border-slate-200 hover:border-slate-300'} shadow-sm`}
+                    >
+                      <div className="flex-1 pr-3">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm text-slate-900 dark:text-white">{item.word}</span>
+                          <button onClick={() => speakWord(item.word)} className="text-indigo-500 hover:text-indigo-600">
+                            <Volume2 className="w-3.5 h-3.5" />
+                          </button>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                            item.status === 'mastered' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' :
+                            item.status === 'learning' ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' :
+                            'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
+                          }`}>
+                            {item.status === 'mastered' ? 'Acquis' : item.status === 'learning' ? 'Moyen' : 'À réviser'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium mt-0.5">{item.translation}</p>
+                        <p className="text-[11px] text-slate-400 italic line-clamp-1 mt-0.5">{item.example}</p>
+                      </div>
+
+                      <button 
+                        onClick={() => deleteWord(item.id)}
+                        className="text-slate-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 transition"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+
+            </div>
+          )}
+
+        </main>
+
+        {/* Modal for Adding New Word */}
+        {isAddingWord && (
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className={`w-full max-w-sm rounded-3xl p-5 shadow-2xl ${darkMode ? 'bg-slate-900 text-white border border-slate-800' : 'bg-white text-slate-800'}`}>
+              <h3 className="text-lg font-bold mb-4">Ajouter un nouveau mot</h3>
+              
+              <form onSubmit={handleAddWordSubmit} className="space-y-3 text-xs">
+                <div>
+                  <label className="block font-semibold mb-1">Mot Anglais *</label>
+                  <input 
+                    type="text"
+                    required
+                    placeholder="ex: Relentless"
+                    value={newWord.word}
+                    onChange={(e) => setNewWord({...newWord, word: e.target.value})}
+                    className={`w-full p-2.5 rounded-xl border font-medium ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold mb-1">Traduction / Définition *</label>
+                  <input 
+                    type="text"
+                    required
+                    placeholder="ex: Implacable, Incessant"
+                    value={newWord.translation}
+                    onChange={(e) => setNewWord({...newWord, translation: e.target.value})}
+                    className={`w-full p-2.5 rounded-xl border font-medium ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold mb-1">Phrase d'Exemple</label>
+                  <textarea 
+                    rows={2}
+                    placeholder="ex: He was relentless in his pursuit of success."
+                    value={newWord.example}
+                    onChange={(e) => setNewWord({...newWord, example: e.target.value})}
+                    className={`w-full p-2.5 rounded-xl border font-medium ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button 
+                    type="button" 
+                    onClick={() => setIsAddingWord(false)}
+                    className="flex-1 py-2.5 rounded-xl border font-semibold hover:bg-slate-100 dark:hover:bg-slate-800"
+                  >
+                    Annuler
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-md"
+                  >
+                    Enregistrer
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Android Material Bottom Navigation Bar */}
+        <nav className={`border-t flex justify-around items-center px-2 py-2 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} z-20`}>
+          
+          <button 
+            onClick={() => setActiveTab('wordOfDay')}
+            className={`flex flex-col items-center py-1.5 px-3 rounded-2xl transition ${activeTab === 'wordOfDay' ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 font-bold' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            <Sparkles className="w-5 h-5" />
+            <span className="text-[10px] mt-1">Jour</span>
+          </button>
+
+          <button 
+            onClick={() => setActiveTab('flashcards')}
+            className={`flex flex-col items-center py-1.5 px-3 rounded-2xl transition ${activeTab === 'flashcards' ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 font-bold' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            <Layers className="w-5 h-5" />
+            <span className="text-[10px] mt-1">Cartes</span>
+          </button>
+
+          <button 
+            onClick={() => setActiveTab('quiz')}
+            className={`flex flex-col items-center py-1.5 px-3 rounded-2xl transition ${activeTab === 'quiz' ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 font-bold' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            <Brain className="w-5 h-5" />
+            <span className="text-[10px] mt-1">Quiz</span>
+          </button>
+
+          <button 
+            onClick={() => setActiveTab('list')}
+            className={`flex flex-col items-center py-1.5 px-3 rounded-2xl transition ${activeTab === 'list' ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 font-bold' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            <ListFilter className="w-5 h-5" />
+            <span className="text-[10px] mt-1">Ma Liste</span>
+          </button>
+
+        </nav>
+
+        {/* Android Navigation Bar Pill Indicator */}
+        <div className={`h-4 w-full flex justify-center items-center pb-1 ${darkMode ? 'bg-slate-900' : 'bg-white'}`}>
+          <div className="w-28 h-1 bg-slate-300 dark:bg-slate-700 rounded-full"></div>
+        </div>
+
+      </div>
+
+      {/* Additional CSS for 3D card flipping */}
+      <style>{`
+        .perspective-1000 {
+          perspective: 1000px;
+        }
+        .transform-style-3d {
+          transform-style: preserve-3d;
+        }
+        .backface-hidden {
+          backface-visibility: hidden;
+        }
+        .rotate-y-180 {
+          transform: rotateY(180deg);
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(6px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.25s ease-out forwards;
+        }
+      `}</style>
+    </div>
+  );
+}
